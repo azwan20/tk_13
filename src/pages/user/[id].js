@@ -4,18 +4,32 @@ import { getDocs, collection, updateDoc, doc, getDoc } from "firebase/firestore"
 import { useRouter } from "next/router";
 import Link from "next/link";
 
-async function updateDataInFirebase(userId, namaUser, jenisSampah, berat, harga, poin, tanggalAdd) {
+async function updateDataInFirebase(userId, jenisSampah, berat, harga, poin, tanggalAdd) {
     try {
         const userDocRef = doc(db, "user", userId);
-        await updateDoc(userDocRef, {
-            jenisSampah,
-            berat,
-            harga,
-            poin,
-            tanggalAdd,
-        });
-        console.log("Document updated successfully");
-        return true;
+        const userDocSnapshot = await getDoc(userDocRef);
+
+        if (userDocSnapshot.exists()) {
+            const userData = userDocSnapshot.data();
+            const newSetoran = {
+                jenisSampah,
+                berat,
+                harga,
+                poin,
+                tanggalAdd,
+            };
+            const updatedRiwayats = [...(userData.riwayats || []), newSetoran];
+
+            await updateDoc(userDocRef, {
+                riwayats: updatedRiwayats
+            });
+
+            console.log("Document updated successfully");
+            return true;
+        } else {
+            console.error("User document not found");
+            return false;
+        }
     } catch (error) {
         console.error("Error updating document", error);
         return false;
@@ -37,13 +51,12 @@ async function fetchData_ModelTransaksi(id) {
 
     if (docSnapshot.exists()) {
         const data = { id: docSnapshot.id, ...docSnapshot.data() };
-        return [data];
+        return data;
     } else {
         // Handle case where the document doesn't exist
-        return [];
+        return null;
     }
 }
-
 
 export default function Home() {
     const [jenisSampah, setjenisSampah] = useState("");
@@ -54,22 +67,18 @@ export default function Home() {
     const router = useRouter();
     const { id } = router.query;
 
-
     const [details, setDetails] = useState(true);
     const [dataSampah, setDataSampah] = useState([]);
-    const [dataUser, setdataUser] = useState([]);
-    const [selectedNama, setSelectedNama] = useState('');
-    const [selectedJenis, setSelectedJenis] = useState('');
-    const [formData, setFormData] = useState({});
+    const [dataUser, setdataUser] = useState(null);
+    const [loadingUser, setLoadingUser] = useState(true); // State untuk menunggu data user
     const [jenis, setJenis] = useState({});
-    const [selectedUserId, setSelectedUserId] = useState('');
+
+    console.log(dataUser);
 
     useEffect(() => {
         async function fetchData() {
             const data = await fetchDataFromFirestore();
             setDataSampah(data);
-            // const dataUser = await fetchDataLoginFromFirestore();
-            // setdataUser(dataUser);
         }
         fetchData();
     }, []);
@@ -79,11 +88,11 @@ export default function Home() {
             if (id) {
                 const data = await fetchData_ModelTransaksi(id);
                 setdataUser(data);
+                setLoadingUser(false); // Data user sudah terisi, set loading menjadi false
             }
         }
         fetchData();
     }, [id]);
-
 
     useEffect(() => {
         if (jenis.harga && jenis.poin) {
@@ -98,9 +107,8 @@ export default function Home() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const added = await updateDataInFirebase(selectedUserId, selectedNama, jenisSampah, berat, harga, poin, tanggalAdd);
+        const added = await updateDataInFirebase(dataUser.id, jenisSampah, berat, harga, poin, tanggalAdd);
         if (added) {
-            setSelectedNama("");
             setjenisSampah("");
             setberat(0);
             setharga(0);
@@ -116,28 +124,23 @@ export default function Home() {
         setDetails(true);
     };
 
-    const handleNamaChange = (event) => {
-        const selectedName = event.target.value;
-        setSelectedNama(selectedName);
-        const selectedItem = dataUser.find(item => item.namaUser === selectedName);
-        setFormData(selectedItem || {});
-        setSelectedUserId(selectedItem?.id || ''); // set the selected user's ID
-    };
-
     const handleSampah = (event) => {
         const selectedName = event.target.value;
-        setSelectedJenis(selectedName);
         const selectedItem = dataSampah.find(item => item.jenisSampah === selectedName);
         setJenis(selectedItem || {});
         setjenisSampah(selectedName);
     };
+
+    if (loadingUser) {
+        return <div>Loading...</div>; // Tampilkan loader saat menunggu data user
+    }
 
     return (
         <>
             <div className="home d-flex">
                 <section className="sidebar">
                     <span>
-                        <h1 className="text-center my-5">USER</h1>
+                        <h1 className="text-center my-5">{dataUser?.namaUser || 'Loading...'}</h1>
                         <div className="d-flex mt-5 ms-4">
                             <span className="d-grid me-3">
                                 <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -145,7 +148,7 @@ export default function Home() {
                                 </svg>
                             </span>
                             <span>
-                                <Link href="/user" style={{textDecoration: 'none', color: '#fff'}}>
+                                <Link href="/user" style={{ textDecoration: 'none', color: '#fff' }}>
                                     <p>Riwayat Setoran</p>
                                 </Link>
                             </span>
@@ -157,27 +160,12 @@ export default function Home() {
                         </Link>
                     </span>
                 </section>
-                <section className="d-flex justify-content-center align-items-center" style={{ width: '80%' }}>
+                <section className="d-flex justify-content-center align-items-center" style={{ width: '80%', maxHeight: '100%', overflowY: 'auto' }}>
                     <div className="content">
                         <div className="jurusan">
                             <div className="text-center mb-5">
                                 <h4>Form Setoran Sampah</h4>
-                            </div>
-                            <div className="form-floating mb-3">
-                                <select
-                                    className="form-select"
-                                    id="floatingSelect"
-                                    aria-label="Floating label select example"
-                                    value={selectedNama}
-                                    onChange={handleNamaChange}
-                                >
-                                    <option value="">Select Nama User</option>
-                                    {dataUser.map((user) => (
-                                        <option key={user.id} value={user.namaUser}>
-                                            {user.namaUser}
-                                        </option>
-                                    ))}
-                                </select>
+                                <h5 className="card-title mt-3">Hello {dataUser?.namaUser}! Mau setor sampah apa hari ini?</h5>
                             </div>
                             <div className="tabel">
                                 <div className="head d-flex justify-content-between align-items-center">
@@ -251,22 +239,26 @@ export default function Home() {
                                     )}
                                 </div>
                             </div>
-                            <div className="riwayat">
-                                <div className="card">
-                                    <div className="card-body d-flex">
-                                    {dataUser.map((item, index) => (
-                                        <div key={index} className="text">
-                                            <h5 className="card-title">{item.namaUser}</h5>
-                                            <p className="card-text">{item.jenisSampah}</p>
-                                            <p className="card-text">Berat: {item.berat} kg</p>
-                                            <p className="card-text">Harga: {item.harga}</p>
-                                            <p className="card-text">Poin: {item.poin}</p>
-                                            <p className="card-text">Tanggal: {item.tanggalAdd}</p>
+                            <h3>Riwayat Setoran</h3>
+                            {dataUser && (
+                                <div className="riwayat">
+                                    {dataUser.riwayats && dataUser.riwayats.map((riwayat, index) => (
+                                        <div key={index} className="card mb-3">
+                                            <div className="card-body d-flex">
+                                                <div className="text">
+                                                    <div >
+                                                        <p className="card-text">{riwayat.jenisSampah}</p>
+                                                        <p className="card-text">Berat: {riwayat.berat} kg</p>
+                                                        <p className="card-text">Harga: {riwayat.harga}</p>
+                                                        <p className="card-text">Poin: {riwayat.poin}</p>
+                                                        <p className="card-text">Tanggal: {riwayat.tanggalAdd}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
-                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </section>
