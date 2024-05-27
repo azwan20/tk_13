@@ -1,24 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../../../public/firbaseConfig";
-import { getDocs, collection, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { getDocs, collection } from "firebase/firestore";
 import { useRouter } from "next/router";
-
-async function addDataToFirebase(jenisSampah, berat, harga, poin, tanggalAdd) {
-    try {
-        const docRefSurat = await addDoc(collection(db, "dataSampah"), {
-            jenisSampah: jenisSampah,
-            berat: berat,
-            harga: harga,
-            poin: poin,
-            tanggalAdd: tanggalAdd,
-        });
-        console.log("Document input document ID : ", docRefSurat.id);
-        return true;
-    } catch (error) {
-        console.error("error input document", error);
-        return false;
-    }
-}
 
 async function fetchDataFromFirestore() {
     const querySnapshot = await getDocs(collection(db, "user"));
@@ -41,7 +24,6 @@ export default function DataRiwayat() {
     const [details, setDetails] = useState(true);
     const [dataSampah, setDataSampah] = useState([]);
     const [selectedNama, setSelectedNama] = useState('');
-    const [isEditMode, setIsEditMode] = useState(false);
     const [formData, setFormData] = useState({});
 
     const router = useRouter();
@@ -60,32 +42,6 @@ export default function DataRiwayat() {
         setpoin(poinPerKg * berat);
     }, [berat, hargaPerKg, poinPerKg]);
 
-    const handleDetails = () => {
-        setDetails(!details);
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const added = await addDataToFirebase(jenisSampah, berat, harga, poin, tanggalAdd);
-        if (added) {
-            setjenisSampah("");
-            setberat(0);
-            setHargaPerKg(0);
-            setPoinPerKg(0);
-            setharga(0);
-            setpoin(0);
-            settanggalAdd("");
-            const updatedData = await fetchDataFromFirestore();
-            setDataSampah(updatedData);
-            alert("Data berhasil di upload");
-        } else {
-            alert("Data tidak berhasil di upload");
-        }
-        setDetails(true);
-    };
-
-    const selectedItem = dataSampah.find(item => item.namaUser === selectedNama);
-
     const handleNamaChange = (event) => {
         const selectedName = event.target.value;
         setSelectedNama(selectedName);
@@ -93,54 +49,14 @@ export default function DataRiwayat() {
         setFormData(selectedItem || {});
     };
 
-    const handleEditClick = () => {
-        setIsEditMode(true);
-    };
-
-    const handleInputChange = (event) => {
-        const { name, value } = event.target;
-        setFormData(prevState => ({
-            ...prevState,
-            [name]: value
-        }));
-    };
-
-    const handleSaveClick = async () => {
-        if (formData.id) {
-            const docRef = doc(db, "dataSampah", formData.id);
-            await updateDoc(docRef, formData);
-            setIsEditMode(false);
-            const updatedData = await fetchDataFromFirestore();
-            setDataSampah(updatedData);
-        }
-        alert("Data berhasil di Update");
-    };
-
-    const handleDeleteClick = async () => {
-        if (formData.id) {
-            const docRef = doc(db, "dataSampah", formData.id);
-            await deleteDoc(docRef);
-            setIsEditMode(false);
-            const updatedData = await fetchDataFromFirestore();
-            setDataSampah(updatedData);
-            setSelectedNama('');
-            setFormData({});
-            alert("Data berhasil di Hapus");
-        }
-    };
-
-    const handleBatal = () => {
-        setIsEditMode(false);
-    };
-
     return (
         <>
             <div className="jurusan">
                 <div className="text-center mb-5">
-                    <h3 className="mb-4">DATA RIWAYAT</h3>
+                    <h3 className="mb-4 text-uppercase">DATA RIWAYAT {formData.namaUser || ''}</h3>
                     <select
                         style={{ width: '20%', margin: 'auto', border: '3px solid #6F4E37' }}
-                        value={selectedItem}
+                        value={selectedNama}
                         onChange={handleNamaChange}
                         className="px-1"
                     >
@@ -149,36 +65,39 @@ export default function DataRiwayat() {
                             <option key={index} value={item.namaUser}>{item.namaUser}</option>
                         ))}
                     </select>
-
                 </div>
-                {details && (
+                {details && formData.namaUser && (
                     <div>
-                        <section className="detail ps-5 pb-5">
-                            <span>
-                                <p>Nama User</p>
-                                <b>: {formData.namaUser || ''}</b>
-                            </span>
-                            <span>
-                                <p>Jenis Sampah Anorganik</p>
-                                <b>: {formData.jenisSampah || ''}</b>
-                            </span>
-                            <span>
-                                <p>Berat Sampah</p>
-                                <b>: {formData.berat || ''}</b>
-                            </span>
-                            <span>
-                                <p>Harga Jual</p>
-                                <b>: {formData.harga || ''}</b>
-                            </span>
-                            <span>
-                                <p>Poin Yang Didapatkan</p>
-                                <b>: {formData.poin || ''}</b>
-                            </span>
-                            <span>
-                                <p>Tanggal Ditambahkan</p>
-                                <b>: {formData.tanggalAdd || ''}</b>
-                            </span>
-                        </section>
+                        <div className="riwayat" style={{ width: '50%' }}>
+                            {formData.riwayats && formData.riwayats.length > 0 ? (
+                                formData.riwayats.map((riwayat, index) => (
+                                    <section key={index} className="detail ps-5 pb-5">
+                                        <span>
+                                            <p>Tanggal Ditambahkan</p>
+                                            <b>: {riwayat.tanggalAdd || ''}</b>
+                                        </span>
+                                        <span>
+                                            <p>Jenis Sampah Anorganik</p>
+                                            <b>: {riwayat.jenisSampah || ''}</b>
+                                        </span>
+                                        <span>
+                                            <p>Berat Sampah</p>
+                                            <b>: {riwayat.berat || ''}</b>
+                                        </span>
+                                        <span>
+                                            <p>Harga Jual</p>
+                                            <b>: {riwayat.harga || ''}</b>
+                                        </span>
+                                        <span>
+                                            <p>Poin Yang Didapatkan</p>
+                                            <b>: {riwayat.poin || ''}</b>
+                                        </span>
+                                    </section>
+                                ))
+                            ) : (
+                                <p>Belum ada riwayat setoran.</p>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
